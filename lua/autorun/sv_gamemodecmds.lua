@@ -2339,19 +2339,52 @@ concommand.Add("gz_test_role_change", function(ply, cmd, args)
     end
 end)
 
+local oldPools = {
+	item = PUBLIC_ITEM_POOL,
+	vehicles = {
+		ground = PUBLIC_GROUND_VEHICLES,
+		water = PUBLIC_WATER_VEHICLES,
+		air = PUBLIC_AIR_VEHICLES
+	}
+}
 concommand.Add("gz_refresh_item_pool", function(ply) 
 	if IsValid(ply) and not ply:IsAdmin() then return end
 	
-	PUBLIC_ITEM_POOL = {
-		"weapon_glock26_electric",
-		"weapon_hf_radio",
-		"weapon_reverse",
-		"weapon_mosin_vig",
-		"weapon_buck200knife",
-		"weapon_hg_axe",
-		"weapon_hg_spear_knife",
+	PUBLIC_ITEM_POOL = oldPools.item
+end)
+
+concommand.Add("gz_refresh_vehicle_pool", function(ply, cmd, args)
+	if IsValid(ply) and not ply:IsAdmin() then return end
 	
-	}
+	local vType = args[1]
+	if vType == "ground" then
+		PUBLIC_GROUND_VEHICLES = oldPools.vehicles.ground
+	elseif vType == "water" then
+		PUBLIC_WATER_VEHICLES = oldPools.vehicles.water
+	elseif vType == "air" then
+		PUBLIC_AIR_VEHICLES = oldPools.vehicles.air
+	end
+end)
+
+concommand.Add("gz_add_entry_item_pool", function(ply, cmd, args)
+	if IsValid(ply) and not ply:IsAdmin() then return end
+	local class = args[1]
+	
+	table.insert(PUBLIC_ITEM_POOL, class)
+end)
+
+concommand.Add("gz_add_entry_vehicle_pool", function(ply, cmd, args)
+	if IsValid(ply) and not ply:IsAdmin() then return end
+	local vType = args[1]
+	local class = args[2]
+	
+	if vType == "ground" then
+		table.insert(PUBLIC_GROUND_VEHICLES, class)
+	elseif vType == "water" then
+		table.insert(PUBLIC_WATER_VEHICLES, class)
+	elseif vType == "air" then
+		table.insert(PUBLIC_AIR_VEHICLES, class)
+	end
 end)
 
 concommand.Add("gz_test_populate_items", function()
