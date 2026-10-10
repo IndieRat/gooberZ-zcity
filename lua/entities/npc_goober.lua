@@ -98,6 +98,12 @@ end
 function ENT:BodyUpdate()
     if not IsValid(self) then return end
 
+    if hg and hg.GooberNPCSupport and hg.GooberNPCSupport.IsGettingUp(self) then
+        self:SetPlaybackRate(1)
+        self:FrameAdvance()
+        return
+    end
+
     local vel = self.loco and self.loco:GetVelocity() or self:GetVelocity()
     local speed2d = vel:Length2D()
 
@@ -170,6 +176,14 @@ end
 -------------------------------------------------------------------
 function ENT:RunBehaviour()
     while true do
+        if hg and hg.GooberNPCSupport and hg.GooberNPCSupport.IsGettingUp(self) then
+            self.loco:SetDesiredSpeed(0)
+            self.loco:SetVelocity(vector_origin)
+            coroutine.wait(0.1)
+            coroutine.yield()
+            continue
+        end
+
         local crawlMul = hg and hg.GooberNPCSupport and hg.GooberNPCSupport.ShouldCrawl(self) and 0.42 or 1
 
         if self:HaveEnemy() then

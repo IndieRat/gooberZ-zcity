@@ -57,6 +57,14 @@ function Support.GetNPCHealthTable(ent)
     return owner.GooberNPCOrg
 end
 
+function Support.IsGettingUp(ent)
+    if not IsValid(ent) then return false end
+    local owner = ResolveNPC(ent)
+    local state = IsValid(owner) and owner.GooberNPCOrg or nil
+    if state then return state.gettingUp == true end
+    return ent.GetNW2Bool and ent:GetNW2Bool("GooberNPCGettingUp", false) or false
+end
+
 if not SERVER then return end
 
 local function IsAlive(ent)
@@ -114,6 +122,8 @@ local function NewHealthTable(ent)
 
         downed = false,
         crawling = false,
+        gettingUp = false,
+        getUpTimer = nil,
         knockdownQueued = false,
         recoverTimer = nil,
         weaponEntity = nil,
@@ -147,6 +157,7 @@ local function SyncEntity(ent, state)
 
     SetNWBool(ent, "GooberNPCDowned", state.downed)
     SetNWBool(ent, "GooberNPCCrawling", state.crawling)
+    SetNWBool(ent, "GooberNPCGettingUp", state.gettingUp)
 end
 
 function Support.Attach(ent)
@@ -411,7 +422,10 @@ local function ClearDownedState(owner, restoreEntity)
     if not state then return end
 
     if state.recoverTimer then timer.Remove(state.recoverTimer) end
+    if state.getUpTimer then timer.Remove(state.getUpTimer) end
     state.recoverTimer = nil
+    state.getUpTimer = nil
+    state.gettingUp = false
     state.downed = false
     owner.GooberNPCDowned = false
 
@@ -465,6 +479,7 @@ local function Recover(owner, rag, removedExternally)
     owner:SetCollisionGroup(owner.GooberNPCOldCollisionGroup or COLLISION_GROUP_NPC)
 
     local getUp = -1
+    local getUpName
     for _, name in ipairs({
         "zombie_slump_rise_01",
         "getup",
@@ -477,14 +492,41 @@ local function Recover(owner, rag, removedExternally)
         local sequence = owner:LookupSequence(name)
         if sequence and sequence >= 0 then
             getUp = sequence
+            getUpName = name
             break
         end
     end
 
+    state.gettingUp = getUp >= 0 and getUpName ~= "idle"
     if getUp >= 0 then
         owner:ResetSequence(getUp)
         owner:SetCycle(0)
         owner:SetPlaybackRate(1)
+    end
+
+    if state.gettingUp then
+        -- Hold movement while the rise animation plays; the NextBot's
+        -- BodyUpdate/behaviour loop also respect this lock.
+        local duration = 1.15
+        local ok, sequenceDuration = pcall(owner.SequenceDuration, owner, getUp)
+        if ok and tonumber(sequenceDuration) and sequenceDuration > 0 then
+            duration = math.Clamp(sequenceDuration, 0.85, 2.7)
+        end
+
+        owner:SetMoveType(MOVETYPE_NONE)
+        local timerName = "GooberNPCSupport_GetUp_" .. owner:EntIndex() .. "_" .. owner:GetCreationID()
+        state.getUpTimer = timerName
+        timer.Create(timerName, duration, 1, function()
+            if not IsValid(owner) or owner.GooberNPCOrg ~= state then return end
+            state.gettingUp = false
+            state.getUpTimer = nil
+            if IsAlive(owner) then
+                owner:SetMoveType(owner.GooberNPCOldMoveType or MOVETYPE_STEP)
+                SyncEntity(owner, state)
+            end
+        end)
+    else
+        state.gettingUp = false
     end
 
     if IsValid(rag) then
@@ -659,10 +701,13 @@ hook.Add("OnNPCKilled", "GooberNPCSupport_DeathCleanup", function(ent)
     local rag = ent.GooberNPCRagdoll
     local state = ent.GooberNPCOrg
     state.downed = false
+    state.gettingUp = false
     ent.GooberNPCDowned = false
     ent.GooberNPCRagdoll = nil
     if state.recoverTimer then timer.Remove(state.recoverTimer) end
+    if state.getUpTimer then timer.Remove(state.getUpTimer) end
     state.recoverTimer = nil
+    state.getUpTimer = nil
     RestoreRagdollWeapon(state)
     timer.Simple(0, function()
         if IsValid(rag) then
@@ -707,7 +752,7 @@ end)
 -- weapon entity attached, rather than receiving a brittle custom AI schedule.
 timer.Create("GooberNPCSupport_CrawlVisual", 0.12, 0, function()
     for ent, state in pairs(tracked) do
-        if not IsValid(ent) or state.downed or not state.crawling then continue end
+        if not IsValid(ent) or state.downed or state.gettingUp or not state.crawling then continue end
 
         local crawlSequence = -1
         for _, name in ipairs({
