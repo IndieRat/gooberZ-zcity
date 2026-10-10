@@ -721,6 +721,17 @@ hook.Add("EntityRemoved", "GooberNPCSupport_EntityCleanup", function(ent)
     if not ent then return end
     tracked[ent] = nil
 
+    local state = ent.GooberNPCOrg
+    if state then
+        if state.recoverTimer then timer.Remove(state.recoverTimer) end
+        if state.getUpTimer then timer.Remove(state.getUpTimer) end
+        state.recoverTimer = nil
+        state.getUpTimer = nil
+        state.downed = false
+        state.gettingUp = false
+        RestoreRagdollWeapon(state)
+    end
+
     local rag = ent.GooberNPCRagdoll
     if IsValid(rag) then
         rag.GooberNPCOwner = nil
