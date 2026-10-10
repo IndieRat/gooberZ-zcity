@@ -118,13 +118,19 @@ function ENT:BodyUpdate()
         targetSeq = walk
     end
 
+    local crawling = hg and hg.GooberNPCSupport and hg.GooberNPCSupport.ShouldCrawl(self)
+    if crawling then
+        local crawl = self:FindSequence({"crawl_all", "crawl", "crawl_01", "zombie_crawl", "crawl_aim"})
+        if crawl ~= -1 then targetSeq = crawl end
+    end
+
     if targetSeq ~= self.CurrentAnim then
         self:ResetSequence(targetSeq)
         self:SetCycle(0)
-        self:SetPlaybackRate(1)
         self.CurrentAnim = targetSeq
     end
 
+    self:SetPlaybackRate(crawling and 0.65 or 1)
     self:FrameAdvance()
 
     -- Smooth facing direction
@@ -164,11 +170,13 @@ end
 -------------------------------------------------------------------
 function ENT:RunBehaviour()
     while true do
+        local crawlMul = hg and hg.GooberNPCSupport and hg.GooberNPCSupport.ShouldCrawl(self) and 0.42 or 1
+
         if self:HaveEnemy() then
-            self.loco:SetDesiredSpeed(self.MoveSpeed)
+            self.loco:SetDesiredSpeed(self.MoveSpeed * crawlMul)
             self:ChaseEnemy()
         else
-            self.loco:SetDesiredSpeed(self.MoveSpeed * 0.6)
+            self.loco:SetDesiredSpeed(self.MoveSpeed * 0.6 * crawlMul)
             
             local wanderPos = self:FindRandomSpawnablePos() or (self:GetPos() + Vector(math.Rand(-1,1), math.Rand(-1,1), 0) * 400)
             self:MoveToPos(wanderPos)
@@ -255,7 +263,8 @@ function ENT:ChaseEnemy()
 
         local dist = self:GetPos():Distance(physEnt:GetPos())
 
-        if dist < self.PounceRange and dist > self.AttackRange and CurTime() > self.NextPounce then
+        if dist < self.PounceRange and dist > self.AttackRange and CurTime() > self.NextPounce
+            and not (hg and hg.GooberNPCSupport and hg.GooberNPCSupport.ShouldCrawl(self)) then
             if self.loco:IsOnGround() then
                 local dir = (physEnt:GetPos() - self:GetPos()):GetNormalized()
                 self.loco:Jump()
